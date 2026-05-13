@@ -11,6 +11,12 @@ specialist through evolution.
 - Python 3.9+
 - Node.js (for running JavaScript tests)
 - OpenAI API key
+- 
+## Clone projeCT
+
+```bash
+git clone https://github.com/spasojewagner/stem-agent.git
+cd stem-agent/stem-agent-metoda
 
 ## Setup
 
