@@ -22,11 +22,15 @@ cd stem-agent/stem-agent-metoda
 
 ```bash
 pip install -r requirements.txt
-cp .env.example .env
+type nul > .env
 ```
 
-Open `.env` and replace the placeholder with your OpenAI API key.
-
+Open `.env` and replace the placeholder with your OpenAI API key and copy model setup.
+```bash
+OPENAI_API_KEY=your-key
+OPENAI_MODEL=gpt-4o-mini
+EVALUATOR_MODEL=gpt-4o
+```
 ## Usage
 
 Interactive mode (the system asks you to type a prompt):
