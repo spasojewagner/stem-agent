@@ -1,0 +1,162 @@
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+MANIFEST
+
+# ===========================
+# Virtual Environments
+# ===========================
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ===========================
+# Environment Variables & Secrets
+# ===========================
+.env
+.env.*
+!.env.example
+*.key
+secrets.json
+secrets.yaml
+secrets.yml
+config/local_settings.py
+
+# ===========================
+# AI / LLM specifics
+# ===========================
+# API keys i konfiguracija
+anthropic_key.txt
+openai_key.txt
+*.pem
+
+# Keš i embeddinzi
+.cache/
+embeddings/
+vector_store/
+chroma_db/
+faiss_index/
+*.pkl
+*.pickle
+
+# Trening podaci i modeli
+models/
+checkpoints/
+*.bin
+*.pt
+*.pth
+*.gguf
+*.safetensors
+
+# ===========================
+# Jupyter Notebooks
+# ===========================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===========================
+# Logs i debug
+# ===========================
+logs/
+*.log
+*.log.*
+log.txt
+debug.txt
+trace.json
+
+# ===========================
+# Baze podataka
+# ===========================
+*.db
+*.sqlite
+*.sqlite3
+
+# ===========================
+# OS fajlovi
+# ===========================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+
+# ===========================
+# IDE i editori
+# ===========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.user
+*.workspace
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.settings/
+
+# ===========================
+# Testovi i coverage
+# ===========================
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# ===========================
+# Dokumentacija (generisana)
+# ===========================
+docs/_build/
+site/
+
+# ===========================
+# Dependency lock fajlovi (opcionalno)
+# ===========================
+# Ukoliko ne želiš da komituješ lock fajlove, odkomentiši:
+# poetry.lock
+# Pipfile.lock
+
+# ===========================
+# Miscellaneous
+# ===========================
+tmp/
+temp/
+.tmp/
+*.bak
+*.orig
+*.rej

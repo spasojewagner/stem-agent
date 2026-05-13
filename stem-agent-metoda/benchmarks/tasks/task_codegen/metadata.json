@@ -1,0 +1,6 @@
+{
+  "id": "task_codegen",
+  "type": "code_generation",
+  "difficulty": "hard",
+  "description": "Implement EventBus from a vague spec -- agent must predict edge cases"
+}

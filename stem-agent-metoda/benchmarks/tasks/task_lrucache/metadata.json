@@ -1,0 +1,7 @@
+{
+  "id": "task_lrucache",
+  "type": "data_structure",
+  "difficulty": "hard",
+  "description": "Implement LRU Cache with get/set/eviction",
+  "question": "Implement a complete LRUCache class. Export as: module.exports = { LRUCache }"
+}

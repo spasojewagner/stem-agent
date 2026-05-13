@@ -1,0 +1,7 @@
+{
+  "id": "task_promisepool",
+  "type": "async",
+  "difficulty": "hard",
+  "description": "Implement PromisePool with concurrency limiting",
+  "question": "Implement a complete PromisePool class. Export as: module.exports = { PromisePool }"
+}

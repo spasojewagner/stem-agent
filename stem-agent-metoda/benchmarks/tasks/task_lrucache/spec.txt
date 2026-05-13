@@ -1,0 +1,7 @@
+Implement an LRUCache class in JavaScript.
+
+An LRU (Least Recently Used) cache stores a limited number of items.
+When the cache is full and a new item is inserted, the least recently
+used item is evicted.
+
+Export as: module.exports = { LRUCache }

@@ -1,0 +1,13 @@
+Implement a PromisePool class in JavaScript.
+
+A PromisePool runs async task functions with a concurrency limit.
+
+Constructor: new PromisePool(tasks, concurrency)
+  - tasks: array of functions, each returns a Promise when called
+  - concurrency: max number of tasks running at the same time
+
+Method: async run()
+  - Starts tasks respecting the concurrency limit
+  - Returns a Promise that resolves to an array of results
+
+Export as: module.exports = { PromisePool }

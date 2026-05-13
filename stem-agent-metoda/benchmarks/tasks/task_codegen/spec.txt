@@ -1,0 +1,6 @@
+Implement an EventBus class in JavaScript.
+
+An EventBus allows different parts of an application to communicate
+by publishing and subscribing to named events.
+
+Export as: module.exports = { EventBus }
