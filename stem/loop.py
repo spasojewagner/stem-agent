@@ -97,7 +97,8 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
               reflect_every: int = 0,
               log: Callable[[str], None] | None = None,
               extra: dict | None = None,
-              compact_limit: int = COMPACT_ABOVE_CHARS) -> RunResult:
+              compact_limit: int = COMPACT_ABOVE_CHARS,
+              pinned: Callable[[], str] | None = None) -> RunResult:
     """Run one agent episode.
 
     on_finish(answer) may return a string to reject the answer; the loop then
@@ -112,6 +113,9 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
     nudges = rejections = 0
 
     for n in range(1, max_steps + 1):
+        if pinned:  # e.g. notes the agent keeps for itself; never compacted away
+            notes = pinned()
+            messages[0]["content"] = system + (f"\n\n# Your notes so far\n{notes}" if notes else "")
         _compact(messages, compact_limit)
         try:
             try:
@@ -122,6 +126,7 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
                     raise
                 log("  request too large; compacting the conversation hard and retrying")
                 _compact(messages, limit=2_000)
+                max_tokens = min(max_tokens, 1500)
                 msg = client.chat(model, messages, tools.specs(), temperature=temperature,
                                   max_tokens=max_tokens, extra=extra)
         except StopRun:

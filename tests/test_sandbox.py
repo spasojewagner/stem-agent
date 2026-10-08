@@ -98,3 +98,10 @@ def test_positional_arguments_reach_the_environment(tmp_path):
     """)
     out, calls = run_code(p, {}, env.call)
     assert '"same": true' in out and '"text"' in out and calls == 3
+
+
+def test_printed_output_is_returned_on_request(tmp_path):
+    p = tool(tmp_path, "def run(env):\n    print('matched 3 docs')\n    return 'done'\n")
+    assert run_code(p, {}, None)[0] == "done"
+    out, _ = run_code(p, {}, None, with_log=True)
+    assert out.startswith("done") and "matched 3 docs" in out

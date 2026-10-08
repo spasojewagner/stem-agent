@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
     g = sub.add_parser("grow", help="develop a genome in one environment")
     g.add_argument("--env", required=True, choices=list(REGISTRY))
     g.add_argument("--generations", type=int, default=3)
-    g.add_argument("--dev-steps", type=int, default=12, help="steps of development per generation")
+    g.add_argument("--dev-steps", type=int, default=16, help="steps of development per generation")
     g.add_argument("--trials", type=int, default=1, help="run_trial calls allowed per generation")
     g.add_argument("--train-tasks", type=int, help="use only the first N training tasks (saves quota)")
     g.add_argument("--run", help="run directory (default runs/<env>)")

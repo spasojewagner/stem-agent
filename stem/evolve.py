@@ -57,7 +57,7 @@ def _latest_lines(outcomes: list[Outcome]) -> list[str]:
 
 
 def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: int = 3,
-         dev_steps: int = 12, trials: int = 1, resume: bool = False, train_limit: int | None = None,
+         dev_steps: int = 16, trials: int = 1, resume: bool = False, train_limit: int | None = None,
          log: Callable[[str], None] = print) -> list[Generation]:
     run_dir.mkdir(parents=True, exist_ok=True)
     best = Genome(run_dir / "genome")

@@ -39,7 +39,7 @@ def _limits() -> None:  # POSIX only: cap CPU time and memory of the child
 
 
 def run_code(path: Path, args: dict, bridge: Bridge | None, timeout: float = 30,
-             max_env_calls: int = 5000) -> tuple[str, int]:
+             max_env_calls: int = 5000, with_log: bool = False) -> tuple[str, int]:
     """Run `run(env, **args)` from the file at `path`.
 
     Returns (output_text, env_calls_made). Errors come back as text starting
@@ -63,8 +63,21 @@ def run_code(path: Path, args: dict, bridge: Bridge | None, timeout: float = 30,
 
         threading.Thread(target=pump, daemon=True).start()
         stderr_chunks: list[str] = []
-        threading.Thread(target=lambda: stderr_chunks.append(proc.stderr.read()),  # type: ignore[union-attr]
-                         daemon=True).start()
+        err_thread = threading.Thread(target=lambda: stderr_chunks.append(proc.stderr.read()),  # type: ignore[union-attr]
+                                      daemon=True)
+        err_thread.start()
+
+        def printed(text: str) -> str:
+            """Append what the tool printed, when asked (print() goes to stderr in the child)."""
+            if not with_log:
+                return text
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                pass
+            err_thread.join(timeout=1)
+            out = "".join(stderr_chunks).strip()
+            return f"{text}\n[printed by the tool]\n{out[-1500:]}" if out else text
 
         calls = 0
         deadline = time.monotonic() + timeout
@@ -102,9 +115,9 @@ def run_code(path: Path, args: dict, bridge: Bridge | None, timeout: float = 30,
                     proc.stdin.write(json.dumps(reply, default=str) + "\n")  # type: ignore[union-attr]
                     proc.stdin.flush()  # type: ignore[union-attr]
                 elif kind == "result":
-                    return str(msg.get("value", "")), calls
+                    return printed(str(msg.get("value", ""))), calls
                 elif kind == "error":
-                    return f"TOOL ERROR: {msg.get('error')}\n{msg.get('trace', '')}".strip(), calls
+                    return printed(f"TOOL ERROR: {msg.get('error')}\n{msg.get('trace', '')}".strip()), calls
         except (BrokenPipeError, OSError) as e:
             return f"TOOL ERROR: {e}", calls
         finally:

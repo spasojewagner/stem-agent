@@ -100,3 +100,13 @@ def test_cut_off_reply_is_pointed_out():
     client = ScriptedClient([cut, tool_call("finish", answer="ok")])
     run_agent(client, "m", "s", "u", tools, max_steps=5)
     assert "cut off" in client.calls[1]["messages"][-1]["content"]
+
+
+def test_pinned_notes_reach_every_request():
+    _, tools = counter()
+    notes = []
+    client = ScriptedClient([lambda *a: (notes.append("format: X acquired Y"), tool_call("inc"))[1],
+                             tool_call("finish", answer="ok")])
+    run_agent(client, "m", "base system", "u", tools, max_steps=4, pinned=lambda: "\n".join(notes))
+    assert client.calls[0]["messages"][0]["content"] == "base system"
+    assert "format: X acquired Y" in client.calls[1]["messages"][0]["content"]

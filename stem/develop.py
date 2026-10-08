@@ -49,7 +49,7 @@ Held-out tasks of the same kind, which you will never see, decide whether this w
 {evidence}
 
 # How to work
-Decide first what this agent must become here, then make the changes that get it there. Look at the environment yourself (probe) before you assume how it behaves. Prefer a few changes you have tested over many you have not. run_trial runs the agent on one training task with the genome as it is at that moment, and costs real budget; you have {trials} trial(s). When you are done, call finish with a short account of what you changed and why. The genome is then scored on all training tasks and kept only if it does better than the best genome so far."""
+Decide first what this agent must become here, then make the changes that get it there. Look at the environment yourself (probe) before you assume how it behaves, and write what you learn down with note: older tool results are shortened to save space, notes are not. Prefer a few changes you have tested over many you have not; anything a tool prints shows up in test_tool's output, which helps when a tool returns the wrong thing. run_trial runs the agent on one training task with the genome as it is at that moment, and costs real budget; you have {trials} trial(s). When you are done, call finish with a short account of what you changed and why. The genome is then scored on all training tasks and kept only if it does better than the best genome so far."""
 
 
 @dataclass
@@ -66,7 +66,7 @@ class Evidence:
             lines += self.latest
         if self.history:
             lines.append("Earlier generations:")
-            lines += self.history[-6:]
+            lines += [h[:220] for h in self.history[-4:]]
         return "\n".join(lines)
 
 
@@ -91,7 +91,7 @@ class DevResult:
 
 
 def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence: Evidence,
-            max_steps: int = 12, max_trials: int = 1, train_limit: int | None = None,
+            max_steps: int = 16, max_trials: int = 1, train_limit: int | None = None,
             log: Callable[[str], None] | None = None) -> DevResult:
     log = log or (lambda _m: None)
     env = env_cls()
@@ -138,7 +138,8 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
         e2 = env_cls()
         e2.start(task(a.get("task_id")))
         out, calls = run_code(path, _as_obj(a.get("args")) or {}, e2.call,
-                              timeout=settings.tool_timeout, max_env_calls=e2.max_internal_calls)
+                              timeout=settings.tool_timeout, max_env_calls=e2.max_internal_calls,
+                              with_log=True)
         score, note = e2.score(out)
         return clip(f"output: {out}", 1800) + f"\n[{calls} environment calls; environment score " \
                                                f"if the agent stopped here and answered with this output: {score:.2f} ({note})]"
@@ -170,9 +171,21 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
                                                               ("max_steps", "temperature", "plan_first",
                                                                "reflect_every", "model_tier")}))
 
+    notes: list[str] = []
+
+    def note(a: dict) -> str:
+        text = str(a.get("text", "")).strip()
+        if text:
+            notes.append(text[:600])
+            del notes[:-12]
+        return f"noted ({len(notes)} notes kept)"
+
     s = lambda props, req=(): schema(props, list(req))
     string = {"type": "string"}
     tools = ToolSet([
+        Tool("note", "Write down something you learned (formats, pitfalls, what failed). Notes stay "
+                     "visible for the rest of this episode; older tool results get shortened.",
+             s({"text": string}, ["text"]), note),
         Tool("probe", "Call one environment action directly to see what it returns, e.g. "
                       '{"action": "read", "args": {"doc_id": "D001"}}. Optionally restart on a training task first.',
              s({"action": string, "args": {"type": "object"}, "task_id": string}, ["action"]), probe),
@@ -230,6 +243,7 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
                     "Begin. Decide what this agent should become, and develop it.",
                     tools, max_steps=max_steps, temperature=0.4, max_tokens=2500, log=log,
                     extra=reasoning_extra(settings.model_develop, settings.reasoning_develop),
-                    compact_limit=7_000)  # prompt + tool list are ~2K tokens already
+                    compact_limit=7_000,  # prompt + tool list are ~2K tokens already
+                    pinned=lambda: "\n".join(f"- {n}" for n in notes))
     summary = run.final or f"(development stopped: {run.stopped}; {run.error})"
     return DevResult(summary, run, trials)
