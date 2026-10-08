@@ -94,3 +94,18 @@ def test_reasoning_effort_only_for_gpt_oss():
     from stem.llm import reasoning_extra
     assert reasoning_extra("openai/gpt-oss-20b", "low") == {"reasoning_effort": "low"}
     assert reasoning_extra("qwen/qwen3.8-27b", "low") == {}
+
+
+def test_development_falls_back_when_quota_is_gone(monkeypatch):
+    calls, sleeps = [], []
+    gone = Resp(429, text="Rate limit reached on tokens per day (TPD): Limit 200000")
+    responses = [gone, OK, OK]
+
+    def post(url, headers, json, timeout):
+        calls.append(json["model"])
+        return responses.pop(0)
+    monkeypatch.setattr(llm.requests, "post", post)
+    c = ChatClient("https://x/v1", "k", 10_000, sleep=sleeps.append, fallbacks={"big": "other"})
+    c.chat("big", [{"role": "user", "content": "hi"}], extra={"reasoning_effort": "low"})
+    c.chat("big", [{"role": "user", "content": "hi"}])
+    assert calls == ["big", "other", "other"]

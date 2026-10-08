@@ -50,6 +50,7 @@ class Settings:
     model_act: str = "openai/gpt-oss-20b"         # the agent doing tasks
     model_fast: str = "qwen/qwen3.8-27b"          # sub-agents, cheap calls
     model_search: str = "openai/gpt-oss-20b"      # server-side web search
+    model_develop_fallback: str = "qwen/qwen3.8-27b"  # takes over when develop's daily quota is gone
     reasoning_develop: str = "medium"             # gpt-oss reasoning effort per role
     reasoning_act: str = "low"
     token_budget: int = 400_000                   # hard stop per process
@@ -70,6 +71,7 @@ class Settings:
             model_act=os.environ.get("STEM_MODEL_ACT", cls.model_act),
             model_fast=os.environ.get("STEM_MODEL_FAST", cls.model_fast),
             model_search=os.environ.get("STEM_MODEL_SEARCH", cls.model_search),
+            model_develop_fallback=os.environ.get("STEM_MODEL_DEVELOP_FALLBACK", cls.model_develop_fallback),
             reasoning_develop=os.environ.get("STEM_REASONING_DEVELOP", cls.reasoning_develop),
             reasoning_act=os.environ.get("STEM_REASONING_ACT", cls.reasoning_act),
             token_budget=_int("STEM_TOKEN_BUDGET", cls.token_budget),

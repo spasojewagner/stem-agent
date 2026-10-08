@@ -74,17 +74,34 @@ class Environment(ABC):
         args = dict(args or {})
         positional = args.pop("__pos__", None) or []
         for a in self.actions():
-            if a.name == name:
-                if positional:  # env.read("D001") works as well as env.read(doc_id="D001")
-                    names = list(a.parameters.get("properties", {}))
-                    if len(positional) > len(names):
-                        raise TypeError(f"{name} takes at most {len(names)} arguments: {names}")
-                    for key, value in zip(names, positional):
-                        if key in args:
-                            raise TypeError(f"{name} got two values for '{key}'")
-                        args[key] = value
-                return a.fn(**args)
-        raise ValueError(f"unknown action '{name}'")
+            if a.name != name:
+                continue
+            names = list(a.parameters.get("properties", {}))
+            # Accept every natural way of calling an action:
+            #   env.read(doc_id="D001"), env.read("D001"), env.read({"doc_id": "D001"})
+            if (len(positional) == 1 and isinstance(positional[0], dict) and not args
+                    and set(positional[0]) <= set(names)):
+                args, positional = dict(positional[0]), []
+            if len(positional) > len(names):
+                raise ValueError(f"{self._signature(a)} takes at most {len(names)} argument(s)")
+            for key, value in zip(names, positional):
+                if key in args:
+                    raise ValueError(f"{self._signature(a)} got two values for '{key}'")
+                args[key] = value
+            unknown = set(args) - set(names)
+            if unknown:
+                raise ValueError(f"{self._signature(a)} has no parameter(s) {sorted(unknown)}")
+            missing = [k for k in a.parameters.get("required", []) if k not in args]
+            if missing:
+                raise ValueError(f"{self._signature(a)} is missing {missing}")
+            return a.fn(**args)
+        raise ValueError(f"unknown action '{name}'. Actions: {[a.name for a in self.actions()]}")
+
+    @staticmethod
+    def _signature(a: "Action") -> str:
+        props = a.parameters.get("properties", {})
+        params = ", ".join(f"{k}: {v.get('type', 'any')}" for k, v in props.items())
+        return f"{a.name}({params})"
 
     # -- grading ------------------------------------------------------------
     @abstractmethod

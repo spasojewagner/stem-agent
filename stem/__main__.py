@@ -48,7 +48,11 @@ def _logger(path: Path | None):
 
 
 def _client(settings: Settings, log) -> ChatClient:
-    return ChatClient(settings.api_base, settings.api_key, settings.token_budget, log=log)
+    fallbacks = {}
+    if settings.model_develop_fallback and settings.model_develop_fallback != settings.model_develop:
+        fallbacks[settings.model_develop] = settings.model_develop_fallback
+    return ChatClient(settings.api_base, settings.api_key, settings.token_budget, log=log,
+                      fallbacks=fallbacks)
 
 
 def _usage(client: ChatClient, log) -> None:

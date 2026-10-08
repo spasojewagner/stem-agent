@@ -113,7 +113,10 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
     def probe(a: dict) -> Any:
         if a.get("task_id"):
             scratch.start(task(a["task_id"]))
-        return scratch.call(str(a.get("action", "")), _as_obj(a.get("args")) or {})
+        args = _as_obj(a.get("args"))
+        if not isinstance(args, dict):  # also accept {"action": "search", "query": "..."}
+            args = {k: v for k, v in a.items() if k not in ("action", "args", "task_id")}
+        return scratch.call(str(a.get("action", "")), args)
 
     def run_trial(a: dict) -> str:
         if len(trials) >= max_trials:
@@ -170,7 +173,8 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
     s = lambda props, req=(): schema(props, list(req))
     string = {"type": "string"}
     tools = ToolSet([
-        Tool("probe", "Call one environment action directly to see how it behaves. Optionally restart on a training task first.",
+        Tool("probe", "Call one environment action directly to see what it returns, e.g. "
+                      '{"action": "read", "args": {"doc_id": "D001"}}. Optionally restart on a training task first.',
              s({"action": string, "args": {"type": "object"}, "task_id": string}, ["action"]), probe),
         Tool("run_trial", "Run the agent with the current genome on one training task. Returns its score and what it did.",
              s({"task_id": string}, ["task_id"]), run_trial),

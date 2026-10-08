@@ -88,3 +88,17 @@ def test_training_only_specialisation_loses_points_on_heldout(tmp_path, referenc
             scores.append(env.score("")[0])
         means[split] = sum(scores) / len(scores)
     assert means["test"] < means["train"] - 0.1, means
+
+
+def test_every_natural_call_style_works():
+    from stem.envs import Archive
+    env = Archive()
+    env.start(env.tasks("train")[0])
+    a = env.call("read", {"doc_id": "D001"})
+    b = env.call("read", {"__pos__": ["D001"]})
+    c = env.call("read", {"__pos__": [{"doc_id": "D001"}]})
+    assert a == b == c
+    with pytest.raises(ValueError, match=r"search\(query: string\) is missing"):
+        env.call("search", {})
+    with pytest.raises(ValueError, match="no parameter"):
+        env.call("read", {"id": "D001"})

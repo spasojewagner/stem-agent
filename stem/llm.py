@@ -83,7 +83,8 @@ class Usage:
 class ChatClient:
     def __init__(self, api_base: str, api_key: str, token_budget: int = 400_000,
                  timeout: int = 120, log: Callable[[str], None] | None = None,
-                 sleep: Callable[[float], None] = time.sleep):
+                 sleep: Callable[[float], None] = time.sleep,
+                 fallbacks: dict[str, str] | None = None):
         if not api_key:
             raise LLMError("No API key. Put GROQ_API_KEY=... in .env (see .env.example).")
         self.url = api_base.rstrip("/") + "/chat/completions"
@@ -95,6 +96,8 @@ class ChatClient:
         self.sleep = sleep
         # model -> (remaining tokens, seconds to full reset, per-minute limit, timestamp)
         self._limits: dict[str, tuple[int, float, int, float]] = {}
+        self.fallbacks = dict(fallbacks or {})   # model -> model to use once its daily quota is gone
+        self.exhausted: set[str] = set()
 
     # -- pacing ---------------------------------------------------------
     def _pace(self, model: str, est_tokens: int) -> None:
@@ -129,6 +132,21 @@ class ChatClient:
     def chat(self, model: str, messages: list[dict], tools: list[dict] | None = None,
              temperature: float = 0.2, max_tokens: int = 1024,
              extra: dict | None = None) -> dict:
+        while model in self.exhausted and self.fallbacks.get(model):
+            model = self.fallbacks[model]
+        try:
+            return self._chat(model, messages, tools, temperature, max_tokens, extra)
+        except QuotaExhausted:
+            alt = self.fallbacks.get(model)
+            if not alt or alt in self.exhausted:
+                raise
+            self.exhausted.add(model)
+            self.log(f"[quota] {model} is out of daily tokens; continuing with {alt}")
+            extra = {k: v for k, v in (extra or {}).items() if k != "reasoning_effort"} or None
+            return self.chat(alt, messages, tools, temperature, max_tokens, extra)
+
+    def _chat(self, model: str, messages: list[dict], tools: list[dict] | None,
+              temperature: float, max_tokens: int, extra: dict | None) -> dict:
         if self.usage.total >= self.budget:
             raise BudgetExceeded(f"token budget {self.budget} spent ({self.usage.total} used)")
 
