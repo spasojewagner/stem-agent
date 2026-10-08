@@ -83,3 +83,18 @@ def test_many_runs_leave_no_errors(tmp_path):
     for _ in range(15):
         out, _ = run_code(p, {}, None)
         assert out.startswith("TOOL ERROR")
+
+
+def test_positional_arguments_reach_the_environment(tmp_path):
+    from stem.envs import Archive
+    env = Archive()
+    env.start(env.tasks("train")[0])
+    p = tool(tmp_path, """
+        def run(env):
+            doc = env.read("D001")
+            same = env.read(doc_id="D001")
+            hits = env.search("revenue")
+            return {"same": doc == same, "keys": sorted(doc), "hits": len(hits)}
+    """)
+    out, calls = run_code(p, {}, env.call)
+    assert '"same": true' in out and '"text"' in out and calls == 3

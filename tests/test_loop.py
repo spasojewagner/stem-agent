@@ -84,3 +84,11 @@ def test_request_too_large_compacts_and_retries():
         raise LLMError("m: HTTP 413: Request too large for model")
     res = run_agent(ScriptedClient([too_large, tool_call("finish", answer="ok")]), "m", "s", "u", tools)
     assert res.final == "ok"
+
+
+def test_last_step_warning():
+    state, tools = counter()
+    client = ScriptedClient([tool_call("inc")] * 3)
+    run_agent(client, "m", "sys", "go", tools, max_steps=3)
+    last_request = client.calls[-1]["messages"]
+    assert "one step left" in last_request[-1]["content"]

@@ -262,6 +262,25 @@ class Genome:
         lines.append("hooks: " + (", ".join(hooks) or "(none)"))
         return "\n".join(lines)
 
+    def changes_since(self, other: "Genome") -> str:
+        """Plain account of what differs from `other` (used when development forgot to say)."""
+        a, b = other.meta(), self.meta()
+        out = [f"{k} changed" for k in ("identity", "system_prompt", "mode") if a[k] != b[k]]
+        def files(g: "Genome", sub: str) -> dict[str, bytes]:
+            return {p.name: p.read_bytes() for p in sorted((g.root / sub).glob("*")) if p.is_file()}
+        for sub in ("tools", "skills", "subagents", "hooks"):
+            before, after = files(other, sub), files(self, sub)
+            for name in sorted(set(before) | set(after)):
+                if name.endswith(".json") and sub == "tools":
+                    continue
+                if name not in before:
+                    out.append(f"{sub}/{name} added")
+                elif name not in after:
+                    out.append(f"{sub}/{name} removed")
+                elif before[name] != after[name]:
+                    out.append(f"{sub}/{name} changed")
+        return ", ".join(out) or "no changes"
+
     # -- versioning ---------------------------------------------------------
     def _git(self, *args: str) -> str:
         try:

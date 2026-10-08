@@ -27,7 +27,7 @@ The agent has been placed in an environment called '{env_name}'.
 {env_brief}
 Its raw actions there:
 {actions}
-The agent gets at most {max_steps} tool calls per task. Raw actions cost one call each. Tools in the genome run as code and may call environment actions many times within a single call, through `env.<action>(**kwargs)`.
+The agent gets at most {max_steps} tool calls per task. Raw actions cost one call each. Tools in the genome run as code and may call environment actions many times within a single call, through `env.<action>(...)` with the arguments listed above; each returns exactly what the action returns.
 
 Training tasks you may study and try:
 {train_tasks}
@@ -214,7 +214,7 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
         for t in web_tools(client, settings):
             tools.add(t)
 
-    actions = "\n".join(f"- {a.name}({', '.join(a.parameters.get('properties', {}))}): {a.description}"
+    actions = "\n".join(f"- {a.name}({', '.join(a.parameters.get('properties', {}))}): {a.doc()}"
                         for a in env.actions())
     prompt = DEVELOPER_PROMPT.format(
         env_name=env.name, env_brief=env.brief, actions=actions, max_steps=env.max_steps,

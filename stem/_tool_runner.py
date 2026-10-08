@@ -38,7 +38,9 @@ class _Env:
         if action.startswith("_"):
             raise AttributeError(action)
 
-        def call(**kwargs):
+        def call(*args, **kwargs):
+            if args:
+                kwargs = dict(kwargs, __pos__=list(args))
             _send({"type": "env", "action": action, "args": kwargs})
             line = sys.stdin.readline()
             if not line:

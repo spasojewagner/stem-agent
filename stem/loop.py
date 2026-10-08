@@ -172,7 +172,10 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
             messages.append({"role": "tool", "tool_call_id": tc.get("id"), "content": out})
             result.steps.append(Step(n, name, args, out))
 
-        if reflect_every and n % reflect_every == 0 and n < max_steps:
+        if n == max_steps - 1:
+            messages.append({"role": "user", "content":
+                             "You have one step left. Call finish now with your answer or a summary."})
+        elif reflect_every and n % reflect_every == 0 and n < max_steps:
             messages.append({"role": "user", "content":
                              f"Step {n} of {max_steps}. Check your progress against the goal "
                              "and adjust your approach if it is not working."})

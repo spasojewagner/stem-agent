@@ -265,11 +265,14 @@ class Archive(Environment):
     def actions(self) -> list[Action]:
         obj = lambda props, req=(): {"type": "object", "properties": props, "required": list(req)}
         return [
-            Action("search", "Keyword search. Returns up to 6 documents with a snippet.",
-                   obj({"query": {"type": "string"}}, ["query"]), self.search),
-            Action("list_documents", "List the archive, 30 documents per page.",
-                   obj({"page": {"type": "integer"}}), self.list_documents),
-            Action("read", "Read one document in full.", obj({"doc_id": {"type": "string"}}, ["doc_id"]), self.read),
+            Action("search", "Keyword search over titles and text.",
+                   obj({"query": {"type": "string"}}, ["query"]), self.search,
+                   'list of up to 6 {"id", "title", "date", "snippet"}'),
+            Action("list_documents", "List the archive, 30 documents per page (page starts at 1).",
+                   obj({"page": {"type": "integer"}}), self.list_documents,
+                   '{"page", "pages", "documents": [{"id", "title", "date"}]}'),
+            Action("read", "Read one document in full.", obj({"doc_id": {"type": "string"}}, ["doc_id"]), self.read,
+                   '{"id", "title", "date", "text"}'),
         ]
 
     def score(self, answer: str) -> tuple[float, str]:

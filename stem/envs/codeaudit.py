@@ -322,14 +322,16 @@ class CodeAudit(Environment):
     def actions(self) -> list[Action]:
         obj = lambda props, req=(): {"type": "object", "properties": props, "required": list(req)}
         return [
-            Action("list_files", "All files in the repository with their line counts.", obj({}), self.list_files),
+            Action("list_files", "All files in the repository with their line counts.", obj({}), self.list_files,
+                   'list of {"path", "lines"}'),
             Action("read_file", "Read a file with line numbers (up to 150 lines per call).",
                    obj({"path": {"type": "string"}, "start": {"type": "integer"}, "end": {"type": "integer"}},
-                       ["path"]), self.read_file),
+                       ["path"]), self.read_file,
+                   'one string; each line is the line number right-aligned in 4 characters, two spaces, then the code'),
             Action("report", "File one finding.",
                    obj({"path": {"type": "string"}, "line": {"type": "integer"},
                         "category": {"type": "string", "enum": CATEGORIES}, "note": {"type": "string"}},
-                       ["path", "line", "category"]), self.report),
+                       ["path", "line", "category"]), self.report, "a short confirmation string"),
         ]
 
     def score(self, answer: str) -> tuple[float, str]:

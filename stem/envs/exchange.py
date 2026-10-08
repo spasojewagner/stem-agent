@@ -171,14 +171,18 @@ class Exchange(Environment):
     def actions(self) -> list[Action]:
         obj = lambda props, req=(): {"type": "object", "properties": props, "required": list(req)}
         return [
-            Action("status", "Current period, cash, holdings and equity.", obj({}), self.status),
+            Action("status", "Current period, cash, holdings and equity.", obj({}), self.status,
+                   '{"period", "last_period", "symbols", "cash", "holdings": {symbol: units}, "equity", "fee_rate"}'),
             Action("prices", "Closing prices up to and including the current period (lookback 1-200).",
-                   obj({"symbol": {"type": "string"}, "lookback": {"type": "integer"}}, ["symbol"]), self.prices),
+                   obj({"symbol": {"type": "string"}, "lookback": {"type": "integer"}}, ["symbol"]), self.prices,
+                   "list of floats, oldest first; the last one is the current price"),
             Action("order", "Market order at the current price. side is 'buy' or 'sell'; quantity in units (fractions allowed).",
                    obj({"symbol": {"type": "string"}, "side": {"type": "string"}, "quantity": {"type": "number"}},
-                       ["symbol", "side", "quantity"]), self.order),
+                       ["symbol", "side", "quantity"]), self.order,
+                   '{"filled", "price", "cash", "holdings"}'),
             Action("advance", "Move time forward by 1-20 periods.",
-                   obj({"periods": {"type": "integer"}}), self.advance),
+                   obj({"periods": {"type": "integer"}}), self.advance,
+                   '{"period", "prices": {symbol: price}, "session_over"}'),
         ]
 
     # -- grading ------------------------------------------------------------

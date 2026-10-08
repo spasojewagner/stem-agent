@@ -35,3 +35,13 @@ def test_copy_fingerprint_and_lineage(tmp_path):
     log = c.log()
     if log:  # git is optional
         assert "stem: undifferentiated genome" in log and "g1: became something" in log
+
+
+def test_changes_since(tmp_path):
+    g = Genome.stem(tmp_path / "g")
+    c = g.copy_to(tmp_path / "c")
+    c.set_identity("x")
+    c.write_tool("scan", "d", {"type": "object", "properties": {}}, "def run(env):\n    return 1\n")
+    text = c.changes_since(g)
+    assert "identity changed" in text and "tools/scan.py added" in text
+    assert g.changes_since(g) == "no changes"

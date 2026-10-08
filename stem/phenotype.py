@@ -35,7 +35,7 @@ def env_tools(env: Any) -> list[Tool]:
     """The environment's raw actions as tools. Each call costs the agent one step."""
     out = []
     for a in env.actions():
-        out.append(Tool(a.name, a.description, a.parameters,
+        out.append(Tool(a.name, a.doc(), a.parameters,
                         (lambda name: lambda args: env.call(name, args))(a.name)))
     return out
 

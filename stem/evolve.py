@@ -117,6 +117,9 @@ def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: 
             dev = develop(cand, env_cls, client, settings, Evidence(g, best_score, latest, history),
                           max_steps=dev_steps, max_trials=trials, train_limit=train_limit, log=log)
             summary, failed = dev.summary, dev.failed
+            if not dev.run.final.strip():
+                summary = f"(development ended without a summary: {dev.run.stopped}) " \
+                          f"Changes: {cand.changes_since(best)}"
             if not failed:
                 summary_file.write_text(summary, encoding="utf-8")
         log(f"development summary: {summary[:400]}")

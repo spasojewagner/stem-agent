@@ -26,6 +26,10 @@ class Action:
     description: str
     parameters: dict
     fn: Callable[..., Any]
+    returns: str = ""     # shape of the result, so code written against it can be right first time
+
+    def doc(self) -> str:
+        return f"{self.description} Returns: {self.returns}" if self.returns else self.description
 
 
 class Environment(ABC):
@@ -67,9 +71,19 @@ class Environment(ABC):
         self.calls += 1
         if self.calls > self.max_internal_calls:
             raise RuntimeError(f"too many environment calls in this task (limit {self.max_internal_calls})")
+        args = dict(args or {})
+        positional = args.pop("__pos__", None) or []
         for a in self.actions():
             if a.name == name:
-                return a.fn(**(args or {}))
+                if positional:  # env.read("D001") works as well as env.read(doc_id="D001")
+                    names = list(a.parameters.get("properties", {}))
+                    if len(positional) > len(names):
+                        raise TypeError(f"{name} takes at most {len(names)} arguments: {names}")
+                    for key, value in zip(names, positional):
+                        if key in args:
+                            raise TypeError(f"{name} got two values for '{key}'")
+                        args[key] = value
+                return a.fn(**args)
         raise ValueError(f"unknown action '{name}'")
 
     # -- grading ------------------------------------------------------------
