@@ -47,9 +47,11 @@ class Settings:
     # Three model tiers. On Groq's free plan every model has its own daily
     # token bucket, so spreading the work across models stretches the quota.
     model_develop: str = "openai/gpt-oss-120b"    # the developmental process
-    model_act: str = "llama-3.3-70b-versatile"    # the agent doing tasks
-    model_fast: str = "llama-3.1-8b-instant"      # sub-agents, cheap calls
+    model_act: str = "openai/gpt-oss-20b"         # the agent doing tasks
+    model_fast: str = "qwen/qwen3.8-27b"          # sub-agents, cheap calls
     model_search: str = "openai/gpt-oss-20b"      # server-side web search
+    reasoning_develop: str = "medium"             # gpt-oss reasoning effort per role
+    reasoning_act: str = "low"
     token_budget: int = 400_000                   # hard stop per process
     web: bool = True                              # web tools for development
     web_allow: list[str] = field(default_factory=list)
@@ -68,6 +70,8 @@ class Settings:
             model_act=os.environ.get("STEM_MODEL_ACT", cls.model_act),
             model_fast=os.environ.get("STEM_MODEL_FAST", cls.model_fast),
             model_search=os.environ.get("STEM_MODEL_SEARCH", cls.model_search),
+            reasoning_develop=os.environ.get("STEM_REASONING_DEVELOP", cls.reasoning_develop),
+            reasoning_act=os.environ.get("STEM_REASONING_ACT", cls.reasoning_act),
             token_budget=_int("STEM_TOKEN_BUDGET", cls.token_budget),
             web=_bool("STEM_WEB", cls.web),
             web_allow=[d.strip().lower() for d in allow.split(",") if d.strip()],

@@ -32,6 +32,17 @@ class QuotaExhausted(StopRun):
     """The provider's daily quota is spent. Resume after it resets."""
 
 
+class ConfigError(StopRun):
+    """Wrong key, retired or inaccessible model: nothing will work until it is fixed."""
+
+
+def reasoning_extra(model: str, effort: str | None) -> dict:
+    """gpt-oss models spend tokens on reasoning; let callers choose how much."""
+    if effort and "gpt-oss" in model:
+        return {"reasoning_effort": effort}
+    return {}
+
+
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 
 
@@ -82,27 +93,37 @@ class ChatClient:
         self.usage = Usage()
         self.log = log or (lambda _m: None)
         self.sleep = sleep
-        self._limits: dict[str, tuple[int, float, float]] = {}  # model -> (remaining, reset_s, stamp)
+        # model -> (remaining tokens, seconds to full reset, per-minute limit, timestamp)
+        self._limits: dict[str, tuple[int, float, int, float]] = {}
 
     # -- pacing ---------------------------------------------------------
     def _pace(self, model: str, est_tokens: int) -> None:
+        """Wait only as long as the token bucket needs to refill for this request."""
         info = self._limits.get(model)
         if not info:
             return
-        remaining, reset_s, stamp = info
-        waited = time.monotonic() - stamp
-        if remaining < est_tokens and waited < reset_s:
-            pause = min(reset_s - waited + 0.5, 65.0)
-            self.log(f"[pace] {model}: ~{est_tokens} tokens needed, {remaining} left in window; waiting {pause:.0f}s")
-            self.sleep(pause)
+        remaining, reset_s, limit, stamp = info
+        elapsed = time.monotonic() - stamp
+        rate = (limit / 60.0) if limit else 0.0          # tokens refilled per second
+        available = remaining + rate * elapsed if rate else remaining
+        if available >= est_tokens or elapsed >= reset_s:
+            return
+        need = est_tokens - available
+        pause = min(need / rate if rate else reset_s - elapsed, reset_s - elapsed, 65.0) + 0.5
+        self.log(f"[pace] {model}: waiting {pause:.0f}s for the per-minute token limit")
+        self.sleep(pause)
 
     def _remember_limits(self, model: str, headers: Any) -> None:
         try:
             remaining = int(headers.get("x-ratelimit-remaining-tokens", ""))
         except (TypeError, ValueError):
             return
+        try:
+            limit = int(headers.get("x-ratelimit-limit-tokens", "0"))
+        except (TypeError, ValueError):
+            limit = 0
         reset = _parse_duration(headers.get("x-ratelimit-reset-tokens"))
-        self._limits[model] = (remaining, reset, time.monotonic())
+        self._limits[model] = (remaining, reset, limit, time.monotonic())
 
     # -- main call --------------------------------------------------------
     def chat(self, model: str, messages: list[dict], tools: list[dict] | None = None,
@@ -118,7 +139,8 @@ class ChatClient:
         if extra:
             body.update(extra)
 
-        est = len(json.dumps(messages)) // 4 + max_tokens
+        # Typical replies are far shorter than max_tokens; a 429 is handled anyway.
+        est = (len(json.dumps(messages)) + len(json.dumps(tools or []))) // 4 + min(max_tokens, 800)
         nudged = False
         for attempt in range(8):
             self._pace(model, est)
@@ -166,6 +188,8 @@ class ChatClient:
                     pass
                 self.log(f"[tool_use_failed] {model}: giving the model's text back to the loop")
                 return {"role": "assistant", "content": failed or "(malformed tool call)"}
+            if r.status_code in (401, 403, 404):
+                raise ConfigError(f"{model}: HTTP {r.status_code}: {text[:300]}")
             if r.status_code in (500, 502, 503, 504):
                 self.sleep(min(2 ** attempt * 2, 30))
                 continue

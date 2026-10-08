@@ -45,7 +45,9 @@ def run_code(path: Path, args: dict, bridge: Bridge | None, timeout: float = 30,
     Returns (output_text, env_calls_made). Errors come back as text starting
     with 'TOOL ERROR', never as exceptions, so the agent can read them.
     """
-    with tempfile.TemporaryDirectory(prefix="stem_tool_") as cwd:
+    # ignore_cleanup_errors: on Windows the folder can stay locked for a moment
+    # after the child exits (or while an antivirus scans it). Leftovers are harmless.
+    with tempfile.TemporaryDirectory(prefix="stem_tool_", ignore_cleanup_errors=True) as cwd:
         proc = subprocess.Popen(
             [sys.executable, "-I", str(RUNNER), str(Path(path).resolve())],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -108,7 +110,12 @@ def run_code(path: Path, args: dict, bridge: Bridge | None, timeout: float = 30,
         finally:
             if proc.poll() is None:
                 proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+            for stream in (proc.stdin, proc.stdout, proc.stderr):
                 try:
-                    proc.wait(timeout=2)
-                except subprocess.TimeoutExpired:
+                    stream.close()  # type: ignore[union-attr]
+                except Exception:
                     pass

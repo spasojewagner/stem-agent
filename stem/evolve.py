@@ -37,9 +37,10 @@ class Generation:
 
 
 def evaluate_genome(genome: Genome, env_cls: type, split: str, client: Any, settings: Any,
-                    log: Callable[[str], None]) -> tuple[float, list[Outcome]]:
+                    log: Callable[[str], None], limit: int | None = None) -> tuple[float, list[Outcome]]:
     outcomes = []
-    for task in env_cls().tasks(split):
+    tasks = env_cls().tasks(split)
+    for task in tasks[:limit] if limit else tasks:
         log(f"  task {task.id} ...")
         out = run_task(genome, env_cls(), task, client, settings, log=log)
         log(f"  -> {out.summary()}")
@@ -56,7 +57,7 @@ def _latest_lines(outcomes: list[Outcome]) -> list[str]:
 
 
 def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: int = 3,
-         dev_steps: int = 16, trials: int = 2, resume: bool = False,
+         dev_steps: int = 12, trials: int = 1, resume: bool = False, train_limit: int | None = None,
          log: Callable[[str], None] = print) -> list[Generation]:
     run_dir.mkdir(parents=True, exist_ok=True)
     best = Genome(run_dir / "genome")
@@ -86,7 +87,7 @@ def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: 
     if not records:
         log(f"generation 0: scoring the undifferentiated genome on {env_cls.name} training tasks")
         t0, tok0 = time.time(), client.usage.total
-        score, outs = evaluate_genome(best, env_cls, "train", client, settings, log)
+        score, outs = evaluate_genome(best, env_cls, "train", client, settings, log, train_limit)
         save(Generation(0, True, score, {o.task_id: o.score for o in outs}, "undifferentiated baseline",
                         best.fingerprint(), client.usage.total - tok0, round(time.time() - t0, 1)), outs)
         latest = _latest_lines(outs)
@@ -114,7 +115,7 @@ def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: 
             log(f"\ngeneration {g}: development")
             cand = best.copy_to(cand_dir)
             dev = develop(cand, env_cls, client, settings, Evidence(g, best_score, latest, history),
-                          max_steps=dev_steps, max_trials=trials, log=log)
+                          max_steps=dev_steps, max_trials=trials, train_limit=train_limit, log=log)
             summary, failed = dev.summary, dev.failed
             if not failed:
                 summary_file.write_text(summary, encoding="utf-8")
@@ -128,7 +129,7 @@ def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: 
             score, outs = best_score, []
         else:
             log(f"generation {g}: scoring the candidate on training tasks")
-            score, outs = evaluate_genome(cand, env_cls, "train", client, settings, log)
+            score, outs = evaluate_genome(cand, env_cls, "train", client, settings, log, train_limit)
         accepted = changed and (score > best_score + 1e-9 or (best_score == 0.0 and score == 0.0))
         rec = Generation(g, accepted, score, {o.task_id: o.score for o in outs}, summary,
                          cand.fingerprint(), client.usage.total - tok0, round(time.time() - t0, 1))

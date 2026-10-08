@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from .genome import HOOK_EVENTS, MODEL_TIERS, Genome, GenomeError
+from .llm import reasoning_extra
 from .loop import RunResult, run_agent
 from .phenotype import run_task
 from .sandbox import run_code
@@ -90,11 +91,11 @@ class DevResult:
 
 
 def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence: Evidence,
-            max_steps: int = 16, max_trials: int = 2,
+            max_steps: int = 12, max_trials: int = 1, train_limit: int | None = None,
             log: Callable[[str], None] | None = None) -> DevResult:
     log = log or (lambda _m: None)
     env = env_cls()
-    train = env.tasks("train")
+    train = env.tasks("train")[:train_limit] if train_limit else env.tasks("train")
     train_ids = [t.id for t in train]
     scratch = env_cls()
     scratch.start(train[0])
@@ -223,6 +224,7 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
 
     run = run_agent(client, settings.model_develop, prompt,
                     "Begin. Decide what this agent should become, and develop it.",
-                    tools, max_steps=max_steps, temperature=0.4, max_tokens=2500, log=log)
+                    tools, max_steps=max_steps, temperature=0.4, max_tokens=2500, log=log,
+                    extra=reasoning_extra(settings.model_develop, settings.reasoning_develop))
     summary = run.final or f"(development stopped: {run.stopped}; {run.error})"
     return DevResult(summary, run, trials)

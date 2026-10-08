@@ -63,9 +63,34 @@ def test_budget(monkeypatch):
         c.chat("m", [{"role": "user", "content": "hi"}])
 
 
-def test_paces_itself_when_window_is_nearly_spent(monkeypatch):
+def test_paces_itself_when_window_is_nearly_spent(monkeypatch):  # no limit header: waits for reset
     low = Resp(200, OK._body, {"x-ratelimit-remaining-tokens": "50", "x-ratelimit-reset-tokens": "20s"})
     c, _, sleeps = client(monkeypatch, [low, OK])
     c.chat("m", [{"role": "user", "content": "hi"}])
     c.chat("m", [{"role": "user", "content": "hi"}], max_tokens=1000)
     assert sleeps and 15 < sleeps[0] <= 21
+
+
+def test_retired_model_stops_the_run(monkeypatch):
+    from stem.llm import ConfigError, StopRun
+    gone = Resp(404, text='{"error":{"message":"The model `llama-3.3-70b-versatile` does not exist","code":"model_not_found"}}')
+    c, _, _ = client(monkeypatch, [gone])
+    with pytest.raises(ConfigError) as info:
+        c.chat("llama-3.3-70b-versatile", [{"role": "user", "content": "hi"}])
+    assert isinstance(info.value, StopRun) and "404" in str(info.value)
+
+
+def test_pacing_waits_only_for_the_refill(monkeypatch):
+    # 8000 tokens/min -> 133 tokens/s; 200 left and ~650 needed -> a few seconds, not the full reset
+    low = Resp(200, OK._body, {"x-ratelimit-remaining-tokens": "200", "x-ratelimit-limit-tokens": "8000",
+                               "x-ratelimit-reset-tokens": "58s"})
+    c, _, sleeps = client(monkeypatch, [low, OK])
+    c.chat("m", [{"role": "user", "content": "hi"}])
+    c.chat("m", [{"role": "user", "content": "hi"}], max_tokens=600)
+    assert sleeps and sleeps[0] < 10
+
+
+def test_reasoning_effort_only_for_gpt_oss():
+    from stem.llm import reasoning_extra
+    assert reasoning_extra("openai/gpt-oss-20b", "low") == {"reasoning_effort": "low"}
+    assert reasoning_extra("qwen/qwen3.8-27b", "low") == {}

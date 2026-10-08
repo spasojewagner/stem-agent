@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from .genome import Genome
+from .llm import reasoning_extra
 from .loop import RunResult, run_agent
 from .sandbox import run_code
 from .tools import Tool, ToolSet, schema
@@ -98,7 +99,7 @@ def build_toolset(genome: Genome, env: Any, client: Any, settings: Any,
             res = run_agent(client, settings.model_fast, spec["system_prompt"] +
                             f"\n\nYou work inside '{env.name}'. {env.brief}\nReport back with finish(answer).",
                             str(args.get("instruction", "")), sub_ts, max_steps=int(spec.get("max_steps", 6)),
-                            log=log)
+                            log=log, extra=reasoning_extra(settings.model_fast, settings.reasoning_act))
             return f"[{spec['name']}] {res.final or '(no answer)'}"
         ts.add(Tool("delegate", "Hand a sub-task to one of your specialists and get its answer back.",
                     schema({"name": {"type": "string", "enum": list(subs)},
@@ -134,9 +135,11 @@ def run_task(genome: Genome, env: Any, task: Any, client: Any, settings: Any,
         return verdict if verdict and verdict.lower() not in {"ok", "accept", "\"\"", "null"} else None
 
     tools = build_toolset(genome, env, client, settings, log)
-    run = run_agent(client, settings.model_for(mode["model_tier"]), system_prompt(genome, env, max_steps),
+    model = settings.model_for(mode["model_tier"])
+    run = run_agent(client, model, system_prompt(genome, env, max_steps),
                     user, tools, max_steps=max_steps, temperature=float(mode["temperature"]),
-                    on_finish=on_finish, reflect_every=int(mode["reflect_every"]), log=log)
+                    on_finish=on_finish, reflect_every=int(mode["reflect_every"]), log=log,
+                    extra=reasoning_extra(model, settings.reasoning_act))
     score, note = env.score(run.final)
     return Outcome(task.id, score, note, run)
 

@@ -95,7 +95,8 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
               max_steps: int = 12, temperature: float = 0.2, max_tokens: int = 1024,
               on_finish: Callable[[str], str | None] | None = None,
               reflect_every: int = 0,
-              log: Callable[[str], None] | None = None) -> RunResult:
+              log: Callable[[str], None] | None = None,
+              extra: dict | None = None) -> RunResult:
     """Run one agent episode.
 
     on_finish(answer) may return a string to reject the answer; the loop then
@@ -114,14 +115,14 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
         try:
             try:
                 msg = client.chat(model, messages, tools.specs(), temperature=temperature,
-                                  max_tokens=max_tokens)
+                                  max_tokens=max_tokens, extra=extra)
             except LLMError as e:
                 if isinstance(e, StopRun) or not any(k in str(e).lower() for k in ("413", "too large", "context")):
                     raise
                 log("  request too large; compacting the conversation hard and retrying")
                 _compact(messages, limit=2_000)
                 msg = client.chat(model, messages, tools.specs(), temperature=temperature,
-                                  max_tokens=max_tokens)
+                                  max_tokens=max_tokens, extra=extra)
         except StopRun:
             raise  # quota or budget: the caller saves progress and stops the run
         except LLMError as e:

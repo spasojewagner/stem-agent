@@ -19,7 +19,7 @@ from pathlib import Path
 from .config import Settings
 from .envs import REGISTRY, make
 from .genome import Genome
-from .llm import ChatClient, LLMError, QuotaExhausted, StopRun
+from .llm import ChatClient, ConfigError, LLMError, QuotaExhausted, StopRun
 from .loop import run_agent
 from .sandbox import run_code
 from .tools import Tool, ToolSet, schema
@@ -105,6 +105,9 @@ def cmd_check(args, settings) -> int:
         except QuotaExhausted as e:
             ok = False
             log(f"!! {tier:8s} {model}: daily quota exhausted. {e}")
+        except ConfigError as e:
+            ok = False
+            log(f"!! {tier:8s} {model}: not usable with this key. {str(e)[:200]}")
         except LLMError as e:
             ok = False
             log(f"!! {tier:8s} {model}: {e}")
@@ -124,8 +127,12 @@ def cmd_envs(args, settings) -> int:
 
 def _quota_exit(e: Exception, log, client, hint: str) -> int:
     log(f"\nStopped: {e}")
-    log(f"Progress is saved. When the quota resets (Groq: midnight UTC) or after raising "
-        f"STEM_TOKEN_BUDGET, run the same command{hint} to continue.")
+    if isinstance(e, ConfigError):
+        log("This is a configuration problem (API key or model name). Check .env, then "
+            "`python -m stem check`. Groq's current models: https://console.groq.com/docs/models")
+    else:
+        log(f"Progress is saved. When the quota resets (Groq: midnight UTC) or after raising "
+            f"STEM_TOKEN_BUDGET, run the same command{hint} to continue.")
     _usage(client, log)
     return 3
 
@@ -139,7 +146,8 @@ def cmd_grow(args, settings) -> int:
     env_cls = type(make(args.env))
     try:
         records = grow(env_cls, settings, client, run_dir, generations=args.generations,
-                       dev_steps=args.dev_steps, trials=args.trials, resume=args.resume, log=log)
+                       dev_steps=args.dev_steps, trials=args.trials, resume=args.resume,
+                       train_limit=args.train_tasks, log=log)
     except StopRun as e:
         return _quota_exit(e, log, client, " with --resume")
     log("\n" + summary_table(records))
@@ -209,8 +217,9 @@ def main(argv: list[str] | None = None) -> int:
     g = sub.add_parser("grow", help="develop a genome in one environment")
     g.add_argument("--env", required=True, choices=list(REGISTRY))
     g.add_argument("--generations", type=int, default=3)
-    g.add_argument("--dev-steps", type=int, default=16)
-    g.add_argument("--trials", type=int, default=2, help="run_trial calls allowed per generation")
+    g.add_argument("--dev-steps", type=int, default=12, help="steps of development per generation")
+    g.add_argument("--trials", type=int, default=1, help="run_trial calls allowed per generation")
+    g.add_argument("--train-tasks", type=int, help="use only the first N training tasks (saves quota)")
     g.add_argument("--run", help="run directory (default runs/<env>)")
     g.add_argument("--resume", action="store_true", help="continue an interrupted run")
 

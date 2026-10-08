@@ -75,3 +75,11 @@ def test_scratch_files_and_stdlib_work(tmp_path):
     """)
     out, _ = run_code(p, {}, None)
     assert out == "ok2.0"
+
+
+def test_many_runs_leave_no_errors(tmp_path):
+    """Windows can keep the scratch folder locked briefly; that must never surface as an error."""
+    p = tool(tmp_path, "def run(env):\n    raise ValueError('x')\n")
+    for _ in range(15):
+        out, _ = run_code(p, {}, None)
+        assert out.startswith("TOOL ERROR")

@@ -35,8 +35,11 @@ def score_genome(genome: Genome, env_cls: type, split: str, client: Any, setting
         else:
             out = run_task(genome, env_cls(), task, client, settings, log=log)
             rec = to_record(out)
-            cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+            if out.run.stopped == "error":  # technical failure: report it, but measure again next time
+                log(f"  {task.id}: not cached, the episode failed: {out.run.error[:200]}")
+            else:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                cache.write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
             log(f"  {task.id}: {rec['score']:.2f} - {rec['note']}")
         records.append(rec)
     return (fmean(r["score"] for r in records) if records else 0.0), records

@@ -67,7 +67,7 @@ docker compose run --rm stem grow --env archive
 
 ## Free tier
 
-Groq's free plan limits each model to roughly 6-8K tokens per minute and 200-500K tokens per day. The client paces itself from the rate-limit headers and waits on HTTP 429, so runs are slow rather than failing. When a daily limit is hit, the run stops and saves its progress; run the same command again (with `--resume` for `grow`) after the reset at midnight UTC. `STEM_TOKEN_BUDGET` caps one command. Start with one environment.
+Groq's free plan limits each model to roughly 8K tokens per minute and 200K tokens per day. The client paces itself from the rate-limit headers and waits on HTTP 429, so runs are slow rather than failing. When a daily limit is hit, the run stops and saves its progress; run the same command again (with `--resume` for `grow`) after the reset at midnight UTC. `STEM_TOKEN_BUDGET` caps one command. Start with one environment, and for a first smoke test use `grow --env archive --generations 1 --train-tasks 1`.
 
 ## Layout
 

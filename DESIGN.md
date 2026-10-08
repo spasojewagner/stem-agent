@@ -38,7 +38,7 @@ v2 starts from the opposite end and checks each point in code, not in prose.
 
 **Security.** Genome-authored code runs in a separate Python process with a stripped environment (no API key), a timeout, CPU and memory limits on Linux, a cap on environment calls, and soft barriers: no sockets, no subprocesses, no directory listing, file access only inside a scratch folder, imports only from the standard library. These stop accidents and shortcuts such as reading an environment's source from disk. They do not stop a determined attacker running as the same user, which is why the Docker setup exists (read-only filesystem, no capabilities, memory and process limits).
 
-**Models.** Defaults target Groq's free tier: `openai/gpt-oss-120b` for development, `llama-3.3-70b-versatile` for doing tasks, `llama-3.1-8b-instant` for sub-agents, `openai/gpt-oss-20b` for web search. Each model has its own daily quota, so the load is spread across them. Any OpenAI-compatible endpoint can be configured.
+**Models.** Defaults target Groq's free tier: `openai/gpt-oss-120b` for development, `openai/gpt-oss-20b` for doing tasks and web search, `qwen/qwen3.8-27b` for sub-agents. Each model has its own daily quota, so the load is spread across them. The acting agent reasons at low effort, development at medium. Any OpenAI-compatible endpoint can be configured.
 
 ## Known limitations
 
