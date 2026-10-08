@@ -160,7 +160,7 @@ class ChatClient:
         # Typical replies are far shorter than max_tokens; a 429 is handled anyway.
         est = (len(json.dumps(messages)) + len(json.dumps(tools or []))) // 4 + min(max_tokens, 800)
         nudged = False
-        for attempt in range(8):
+        for attempt in range(10):
             self._pace(model, est)
             try:
                 r = requests.post(self.url, headers=self.headers, json=body, timeout=self.timeout)
@@ -177,17 +177,25 @@ class ChatClient:
                 u = data.get("usage") or {}
                 self.usage.add(model, int(u.get("prompt_tokens", 0)), int(u.get("completion_tokens", 0)))
                 msg = data["choices"][0]["message"]
+                msg["_finish"] = data["choices"][0].get("finish_reason")
                 if isinstance(msg.get("content"), str):
                     msg["content"] = _THINK.sub("", msg["content"]).strip()
                 return msg
 
             text = r.text[:600]
-            if r.status_code == 429:
+            if r.status_code in (413, 429):
                 low = text.lower()
                 if "per day" in low or "(rpd)" in low or "(tpd)" in low or "daily" in low:
                     raise QuotaExhausted(f"{model}: daily limit reached. {text[:200]}")
-                wait = _parse_duration(r.headers.get("retry-after")) or min(2 ** attempt * 2, 60)
-                self.log(f"[429] {model}: waiting {wait:.0f}s")
+                # A request bigger than the per-minute limit will never succeed by waiting.
+                m = re.search(r"Limit (\d+), (?:Used \d+, )?Requested (\d+)", text)
+                if r.status_code == 413 or "too large" in low or (m and int(m.group(2)) > int(m.group(1))):
+                    raise LLMError(f"{model}: request too large for the per-minute limit. {text[:200]}")
+                hint = re.search(r"try again in ([\dhms.]+)", text)
+                wait = (_parse_duration(r.headers.get("retry-after"))
+                        or (_parse_duration(hint.group(1)) if hint else 0)
+                        or min(2 ** attempt * 2, 60))
+                self.log(f"[429] {model}: waiting {wait:.0f}s ({text[:120]})")
                 self.sleep(min(wait + 0.5, 65.0))
                 continue
             if r.status_code == 400 and "tool_use_failed" in text and not nudged:

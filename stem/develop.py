@@ -229,6 +229,7 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
     run = run_agent(client, settings.model_develop, prompt,
                     "Begin. Decide what this agent should become, and develop it.",
                     tools, max_steps=max_steps, temperature=0.4, max_tokens=2500, log=log,
-                    extra=reasoning_extra(settings.model_develop, settings.reasoning_develop))
+                    extra=reasoning_extra(settings.model_develop, settings.reasoning_develop),
+                    compact_limit=7_000)  # prompt + tool list are ~2K tokens already
     summary = run.final or f"(development stopped: {run.stopped}; {run.error})"
     return DevResult(summary, run, trials)

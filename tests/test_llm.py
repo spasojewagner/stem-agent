@@ -109,3 +109,21 @@ def test_development_falls_back_when_quota_is_gone(monkeypatch):
     c.chat("big", [{"role": "user", "content": "hi"}], extra={"reasoning_effort": "low"})
     c.chat("big", [{"role": "user", "content": "hi"}])
     assert calls == ["big", "other", "other"]
+
+
+def test_oversized_request_is_not_retried_forever(monkeypatch):
+    from stem.llm import LLMError
+    big = Resp(429, text="Rate limit reached for model `q` on tokens per minute (TPM): Limit 8000, "
+                         "Used 0, Requested 9100. Please reduce your message size.")
+    c, calls, _ = client(monkeypatch, [big])
+    with pytest.raises(LLMError, match="too large"):
+        c.chat("q", [{"role": "user", "content": "hi"}])
+    assert len(calls) == 1
+
+
+def test_wait_hint_in_message_is_used(monkeypatch):
+    tpm = Resp(429, text="Rate limit reached on tokens per minute (TPM): Limit 8000, Used 7900, "
+                         "Requested 500. Please try again in 7.5s.")
+    c, _, sleeps = client(monkeypatch, [tpm, OK])
+    c.chat("q", [{"role": "user", "content": "hi"}])
+    assert 7.5 <= sleeps[0] <= 8.5

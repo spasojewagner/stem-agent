@@ -92,3 +92,11 @@ def test_last_step_warning():
     run_agent(client, "m", "sys", "go", tools, max_steps=3)
     last_request = client.calls[-1]["messages"]
     assert "one step left" in last_request[-1]["content"]
+
+
+def test_cut_off_reply_is_pointed_out():
+    _, tools = counter()
+    cut = dict(tool_call("inc"), _finish="length")
+    client = ScriptedClient([cut, tool_call("finish", answer="ok")])
+    run_agent(client, "m", "s", "u", tools, max_steps=5)
+    assert "cut off" in client.calls[1]["messages"][-1]["content"]

@@ -96,7 +96,8 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
               on_finish: Callable[[str], str | None] | None = None,
               reflect_every: int = 0,
               log: Callable[[str], None] | None = None,
-              extra: dict | None = None) -> RunResult:
+              extra: dict | None = None,
+              compact_limit: int = COMPACT_ABOVE_CHARS) -> RunResult:
     """Run one agent episode.
 
     on_finish(answer) may return a string to reject the answer; the loop then
@@ -111,7 +112,7 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
     nudges = rejections = 0
 
     for n in range(1, max_steps + 1):
-        _compact(messages)
+        _compact(messages, compact_limit)
         try:
             try:
                 msg = client.chat(model, messages, tools.specs(), temperature=temperature,
@@ -131,6 +132,7 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
 
         messages.append(_assistant_record(msg))
         calls = msg.get("tool_calls") or []
+        truncated = msg.get("_finish") == "length"
         if not calls:
             text = (msg.get("content") or "").strip()
             if nudges < 2:
@@ -172,6 +174,10 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
             messages.append({"role": "tool", "tool_call_id": tc.get("id"), "content": out})
             result.steps.append(Step(n, name, args, out))
 
+        if truncated:
+            messages.append({"role": "user", "content":
+                             "Your last reply was cut off at the output length limit, so anything long in it "
+                             "(such as code) is incomplete. Write it shorter, or split it into smaller pieces."})
         if n == max_steps - 1:
             messages.append({"role": "user", "content":
                              "You have one step left. Call finish now with your answer or a summary."})
