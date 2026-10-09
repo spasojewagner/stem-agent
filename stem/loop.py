@@ -98,11 +98,15 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
               log: Callable[[str], None] | None = None,
               extra: dict | None = None,
               compact_limit: int = COMPACT_ABOVE_CHARS,
-              pinned: Callable[[], str] | None = None) -> RunResult:
+              pinned: Callable[[int, int], str] | None = None) -> RunResult:
     """Run one agent episode.
 
     on_finish(answer) may return a string to reject the answer; the loop then
     hands the rejection back to the model (at most twice) instead of stopping.
+    pinned(step, max_steps) returns text appended to the system prompt on
+    every step (notes, progress), which compaction never touches.
+    On the last step only `finish` is offered, so an episode ends with an
+    answer instead of one more exploratory call.
     """
     log = log or (lambda _m: None)
     if tools.get(FINISH) is None:
@@ -113,13 +117,15 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
     nudges = rejections = 0
 
     for n in range(1, max_steps + 1):
+        last = n == max_steps
         if pinned:  # e.g. notes the agent keeps for itself; never compacted away
-            notes = pinned()
-            messages[0]["content"] = system + (f"\n\n# Your notes so far\n{notes}" if notes else "")
+            extra_text = pinned(n, max_steps)
+            messages[0]["content"] = system + (f"\n\n{extra_text}" if extra_text else "")
         _compact(messages, compact_limit)
+        specs = [tools.get(FINISH).spec()] if last else tools.specs()
         try:
             try:
-                msg = client.chat(model, messages, tools.specs(), temperature=temperature,
+                msg = client.chat(model, messages, specs, temperature=temperature,
                                   max_tokens=max_tokens, extra=extra)
             except LLMError as e:
                 if isinstance(e, StopRun) or not any(k in str(e).lower() for k in ("413", "too large", "context")):
@@ -127,7 +133,7 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
                 log("  request too large; compacting the conversation hard and retrying")
                 _compact(messages, limit=2_000)
                 max_tokens = min(max_tokens, 1500)
-                msg = client.chat(model, messages, tools.specs(), temperature=temperature,
+                msg = client.chat(model, messages, specs, temperature=temperature,
                                   max_tokens=max_tokens, extra=extra)
         except StopRun:
             raise  # quota or budget: the caller saves progress and stops the run
@@ -140,7 +146,7 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
         truncated = msg.get("_finish") == "length"
         if not calls:
             text = (msg.get("content") or "").strip()
-            if nudges < 2:
+            if nudges < 2 and not last:
                 nudges += 1
                 messages.append({"role": "user", "content":
                                  "Act through your tools. When you are done, call finish(answer)."})
@@ -163,7 +169,7 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
 
             if name == FINISH:
                 answer = str(args.get("answer", ""))
-                verdict = on_finish(answer) if on_finish else None
+                verdict = on_finish(answer) if on_finish and not last else None
                 if verdict and rejections < 2:
                     rejections += 1
                     out = f"Not accepted yet: {verdict}"
@@ -185,7 +191,8 @@ def run_agent(client: Any, model: str, system: str, user: str, tools: ToolSet,
                              "(such as code) is incomplete. Write it shorter, or split it into smaller pieces."})
         if n == max_steps - 1:
             messages.append({"role": "user", "content":
-                             "You have one step left. Call finish now with your answer or a summary."})
+                             "You have one step left, and only finish is available in it. Call finish now "
+                             "with your answer or a summary."})
         elif reflect_every and n % reflect_every == 0 and n < max_steps:
             messages.append({"role": "user", "content":
                              f"Step {n} of {max_steps}. Check your progress against the goal "

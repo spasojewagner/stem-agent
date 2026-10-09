@@ -49,7 +49,11 @@ Held-out tasks of the same kind, which you will never see, decide whether this w
 {evidence}
 
 # How to work
-Decide first what this agent must become here, then make the changes that get it there. Look at the environment yourself (probe) before you assume how it behaves, and write what you learn down with note: older tool results are shortened to save space, notes are not, and your notes are passed on to the next generation of development. Prefer a few changes you have tested over many you have not; anything a tool prints shows up in test_tool's output, which helps when a tool returns the wrong thing. run_trial runs the agent on one training task with the genome as it is at that moment, and costs real budget; you have {trials} trial(s). When you are done, call finish with a short account of what you changed and why. The genome is then scored on all training tasks and kept only if it does better than the best genome so far."""
+Decide first what this agent must become here, then make the changes that get it there. If the genome already has tools, start by reading their code (view_genome with with_code) next to the latest training results: fixing what is there is usually quicker than starting again. Probe only to learn formats and pitfalls; a tool can call the environment many times in one call, so once you know the formats, write code that does the exploring and read its output with test_tool. Write what you learn down with note: older tool results are shortened to save space, notes are not, and your notes are passed on to the next generation of development. Prefer a few changes you have tested over many you have not; anything a tool prints shows up in test_tool's output, which helps when a tool returns the wrong thing. run_trial runs the agent on one training task with the genome as it is at that moment, and costs real budget; you have {trials} trial(s). You have {dev_steps} steps; the last one can only be finish, with a short account of what you changed and why. The genome is then scored on all training tasks and kept only if it does better than the best genome so far."""
+
+
+REPEATS_ALLOWED = 2          # identical probes beyond this are refused
+EDIT_PREFIXES = ("set_", "write_", "delete_")
 
 
 @dataclass
@@ -117,13 +121,25 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
         raise ValueError(f"unknown training task '{task_id}'. Training tasks: {train_ids}")
 
     # -- environment access ----------------------------------------------------
+    probes: dict[str, int] = {}
+
     def probe(a: dict) -> Any:
-        if a.get("task_id"):
-            scratch.start(task(a["task_id"]))
         args = _as_obj(a.get("args"))
         if not isinstance(args, dict):  # also accept {"action": "search", "query": "..."}
             args = {k: v for k, v in a.items() if k not in ("action", "args", "task_id")}
-        return scratch.call(str(a.get("action", "")), args)
+        action = str(a.get("action", ""))
+        key = json.dumps([action, args, a.get("task_id")], sort_keys=True, default=str)
+        probes[key] = probes.get(key, 0) + 1
+        if probes[key] > REPEATS_ALLOWED:
+            return (f"Not run: this exact probe already ran {probes[key] - 1} times and returns the same "
+                    f"thing every time. Keep what you need with note, and use it: write or fix a tool.")
+        if a.get("task_id"):
+            scratch.start(task(a["task_id"]))
+        out = scratch.call(action, args)
+        if probes[key] > 1:
+            return {"note": "You ran this exact probe before; the result is the same. Keep what matters "
+                            "with note instead of probing again.", "result": out}
+        return out
 
     def run_trial(a: dict) -> str:
         if len(trials) >= max_trials:
@@ -240,19 +256,53 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
         for t in web_tools(client, settings):
             tools.add(t)
 
+    # Remember which genome edits succeeded, for the progress line below.
+    changes: list[str] = []
+    tested: list[str] = []
+
+    def tracked(tool: Tool) -> Tool:
+        def fn(a: dict, _inner=tool.fn, _name=tool.name) -> Any:
+            out = _inner(a)
+            if not str(out).startswith(("ERROR", "no trials left")):
+                if _name == "test_tool":
+                    tested.append(str(a.get("name", "")))
+                else:
+                    label = a.get("name") or a.get("event") or ""
+                    changes.append(f"{_name}({label})" if label else _name)
+            return out
+        return Tool(tool.name, tool.description, tool.parameters, fn)
+
+    for name in tools.names():
+        if name.startswith(EDIT_PREFIXES) or name == "test_tool":
+            tools.add(tracked(tools.get(name)))
+
+    def progress(n: int, total: int) -> str:
+        lines = [f"# Progress\nStep {n} of {total}. Genome changes this episode: "
+                 f"{', '.join(dict.fromkeys(changes)) or 'none yet'}. "
+                 f"Tools tested: {', '.join(dict.fromkeys(tested)) or 'none yet'}."]
+        if not changes and n > total * 0.4:
+            lines.append(f"You have used {n - 1} of {total} steps without changing the genome. Stop "
+                         "exploring: change the genome now (write or fix a tool and test it), or the "
+                         "steps so far are wasted.")
+        elif n == total - 2:
+            lines.append("Two steps left after this one. Make sure your best change is saved and tested.")
+        if notes:
+            lines.append("# Your notes so far\n" + "\n".join(f"- {x}" for x in notes))
+        return "\n".join(lines)
+
     actions = "\n".join(f"- {a.name}({', '.join(a.parameters.get('properties', {}))}): {a.doc()}"
                         for a in env.actions())
     prompt = DEVELOPER_PROMPT.format(
         env_name=env.name, env_brief=env.brief, actions=actions, max_steps=env.max_steps,
         train_tasks="\n".join(f"- {t.id}: {t.instruction}" for t in train),
         tiers=", ".join(MODEL_TIERS), genome=genome.describe(), evidence=evidence.render(),
-        trials=max_trials)
+        trials=max_trials, dev_steps=max_steps)
 
     run = run_agent(client, settings.model_develop, prompt,
                     "Begin. Decide what this agent should become, and develop it.",
                     tools, max_steps=max_steps, temperature=0.4, max_tokens=2500, log=log,
                     extra=reasoning_extra(settings.model_develop, settings.reasoning_develop),
                     compact_limit=7_000,  # prompt + tool list are ~2K tokens already
-                    pinned=lambda: "\n".join(f"- {n}" for n in notes))
+                    pinned=progress)
     summary = run.final or f"(development stopped: {run.stopped}; {run.error})"
     return DevResult(summary, run, trials)

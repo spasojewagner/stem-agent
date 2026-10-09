@@ -136,3 +136,35 @@ def test_ctrl_c_exits_cleanly(tmp_path, monkeypatch, capsys):
     assert code == 130
     out = capsys.readouterr().out
     assert "Stopped with Ctrl+C" in out and "--resume" in out
+
+
+def _develop_with(script, settings, tmp_path, steps=6):
+    from stem.develop import Evidence, develop
+    genome = Genome.stem(tmp_path / "g")
+    client = ScriptedClient(script)
+    dev = develop(genome, Exchange, client, settings, Evidence(1, 0.0), max_steps=steps, max_trials=0)
+    return dev, client
+
+
+def test_repeated_identical_probes_are_refused(tmp_path, settings):
+    dev, _ = _develop_with([tool_call("probe", action="status")] * 3 + [tool_call("finish", answer="x")],
+                           settings, tmp_path)
+    results = [s.result for s in dev.run.steps if s.tool == "probe"]
+    assert "ran this exact probe before" in results[1]
+    assert results[2].startswith("Not run: this exact probe already ran 2 times")
+
+
+def test_progress_line_pushes_towards_a_change(tmp_path, settings):
+    script = [tool_call("probe", action="status", _id=f"p{i}") for i in range(5)]
+    dev, client = _develop_with(script, settings, tmp_path, steps=6)
+    first, later = client.calls[0]["messages"][0]["content"], client.calls[3]["messages"][0]["content"]
+    assert "Step 1 of 6. Genome changes this episode: none yet" in first
+    assert "without changing the genome" not in first
+    assert "used 3 of 6 steps without changing the genome" in later
+    assert [t["function"]["name"] for t in client.calls[-1]["tools"]] == ["finish"]   # last step
+
+
+def test_progress_line_lists_changes(tmp_path, settings):
+    script = [tool_call("set_identity", text="a careful agent"), tool_call("probe", action="status")]
+    _, client = _develop_with(script, settings, tmp_path, steps=6)
+    assert "Genome changes this episode: set_identity" in client.calls[1]["messages"][0]["content"]

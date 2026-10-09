@@ -107,6 +107,29 @@ def test_pinned_notes_reach_every_request():
     notes = []
     client = ScriptedClient([lambda *a: (notes.append("format: X acquired Y"), tool_call("inc"))[1],
                              tool_call("finish", answer="ok")])
-    run_agent(client, "m", "base system", "u", tools, max_steps=4, pinned=lambda: "\n".join(notes))
+    run_agent(client, "m", "base system", "u", tools, max_steps=4, pinned=lambda n, total: "\n".join(notes))
     assert client.calls[0]["messages"][0]["content"] == "base system"
     assert "format: X acquired Y" in client.calls[1]["messages"][0]["content"]
+
+
+def test_last_step_offers_only_finish():
+    _, tools = counter()
+    client = ScriptedClient([tool_call("inc"), tool_call("inc"), tool_call("finish", answer="done")])
+    res = run_agent(client, "m", "sys", "go", tools, max_steps=3)
+    assert [t["function"]["name"] for t in client.calls[0]["tools"]] == ["inc", "finish"]
+    assert [t["function"]["name"] for t in client.calls[-1]["tools"]] == ["finish"]
+    assert res.final == "done" and res.stopped == "finished"
+
+
+def test_text_on_last_step_is_taken_as_the_answer():
+    _, tools = counter()
+    client = ScriptedClient([tool_call("inc"), {"role": "assistant", "content": "summary in prose"}])
+    res = run_agent(client, "m", "sys", "go", tools, max_steps=2)
+    assert res.final == "summary in prose" and res.stopped == "finished"
+
+
+def test_finish_hook_cannot_reject_on_the_last_step():
+    _, tools = counter()
+    client = ScriptedClient([tool_call("finish", answer="a"), tool_call("finish", answer="b")])
+    res = run_agent(client, "m", "s", "u", tools, max_steps=2, on_finish=lambda a: "check again")
+    assert res.final == "b" and res.stopped == "finished"
