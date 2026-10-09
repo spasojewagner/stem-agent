@@ -7,7 +7,9 @@ generation g   copy the best genome -> development rewrites the copy ->
                if it changed anything at all, so early groundwork is not lost)
 
 Everything is written to disk after each generation, so a run interrupted by
-a daily quota can be resumed with --resume.
+a daily quota (or Ctrl+C) can be resumed with --resume. Notes written during
+development go to notebook.jsonl as they are made and are shown to later
+generations, so a diagnosis is not lost when development runs out of steps.
 """
 from __future__ import annotations
 
@@ -48,6 +50,34 @@ def evaluate_genome(genome: Genome, env_cls: type, split: str, client: Any, sett
     return (fmean(o.score for o in outcomes) if outcomes else 0.0), outcomes
 
 
+NOTEBOOK_SHOWN = 8        # notes from earlier generations shown to development
+NOTE_CHARS_SHOWN = 300
+
+
+def read_notebook(run_dir: Path, limit: int = NOTEBOOK_SHOWN) -> list[str]:
+    path = run_dir / "notebook.jsonl"
+    if not path.exists():
+        return []
+    notes = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        text = " ".join(str(rec.get("text", "")).split())
+        if len(text) > NOTE_CHARS_SHOWN:
+            text = text[:NOTE_CHARS_SHOWN] + " ..."
+        notes.append(f"g{rec.get('generation', '?')}: {text}")
+    return notes[-limit:]
+
+
+def _note_writer(run_dir: Path, generation: int) -> Callable[[str], None]:
+    def write(text: str) -> None:
+        with (run_dir / "notebook.jsonl").open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"generation": generation, "text": text}, ensure_ascii=False) + "\n")
+    return write
+
+
 def _latest_lines(outcomes: list[Outcome]) -> list[str]:
     lines = []
     for o in outcomes:
@@ -68,8 +98,9 @@ def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: 
         records = [Generation(**json.loads(l)) for l in gen_file.read_text(encoding="utf-8").splitlines() if l]
         log(f"resuming {run_dir} after generation {records[-1].generation}")
     else:
-        if gen_file.exists():
-            gen_file.unlink()
+        for old in (gen_file, run_dir / "notebook.jsonl"):
+            if old.exists():
+                old.unlink()
         Genome.stem(best.root)
         (run_dir / "run.json").write_text(json.dumps({
             "environment": env_cls.name, "created": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -114,8 +145,10 @@ def grow(env_cls: type, settings: Any, client: Any, run_dir: Path, generations: 
         else:
             log(f"\ngeneration {g}: development")
             cand = best.copy_to(cand_dir)
-            dev = develop(cand, env_cls, client, settings, Evidence(g, best_score, latest, history),
-                          max_steps=dev_steps, max_trials=trials, train_limit=train_limit, log=log)
+            evidence = Evidence(g, best_score, latest, history, read_notebook(run_dir))
+            dev = develop(cand, env_cls, client, settings, evidence, max_steps=dev_steps,
+                          max_trials=trials, train_limit=train_limit, log=log,
+                          on_note=_note_writer(run_dir, g))
             summary, failed = dev.summary, dev.failed
             if not dev.run.final.strip():
                 summary = f"(development ended without a summary: {dev.run.stopped}) " \

@@ -89,3 +89,50 @@ def test_failed_development_is_not_kept(tmp_path, settings):
     recs = grow(Exchange, settings, client, run_dir, generations=1, dev_steps=4, trials=0, log=lambda m: None)
     assert not recs[-1].accepted
     assert Genome(run_dir / "genome").is_stem()
+
+
+def test_notes_reach_the_next_generation(tmp_path, settings):
+    script = [tool_call("note", text="status() returns cash and positions; prices move in ticks"),
+              tool_call("set_identity", text="groundwork"),
+              tool_call("finish", answer="noted the formats")]
+    run_dir = tmp_path / "run"
+    grow(Exchange, settings, RoleClient(settings, script), run_dir, generations=1, dev_steps=4,
+         trials=0, log=lambda m: None)
+
+    later = RoleClient(settings, [tool_call("finish", answer="nothing new")])
+    grow(Exchange, settings, later, run_dir, generations=1, dev_steps=4, trials=0, resume=True,
+         log=lambda m: None)
+    system = later.dev.calls[0]["messages"][0]["content"]
+    assert "Notes from earlier development" in system
+    assert "g1: status() returns cash and positions" in system
+
+
+def test_interrupted_development_keeps_its_notes(tmp_path, settings):
+    import pytest
+
+    def ctrl_c(*_):
+        raise KeyboardInterrupt
+    run_dir = tmp_path / "run"
+    first = RoleClient(settings, [tool_call("note", text="the tool must also read corrections"), ctrl_c])
+    with pytest.raises(KeyboardInterrupt):
+        grow(Exchange, settings, first, run_dir, generations=1, dev_steps=4, trials=0, log=lambda m: None)
+
+    again = RoleClient(settings, [tool_call("finish", answer="resumed")])
+    recs = grow(Exchange, settings, again, run_dir, generations=1, dev_steps=4, trials=0, resume=True,
+                log=lambda m: None)
+    assert recs[-1].generation == 1                                   # the interrupted generation reruns
+    assert "g1: the tool must also read corrections" in again.dev.calls[0]["messages"][0]["content"]
+
+
+def test_ctrl_c_exits_cleanly(tmp_path, monkeypatch, capsys):
+    import stem.__main__ as cli
+    import stem.evolve
+
+    def interrupted(*_a, **_k):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(stem.evolve, "grow", interrupted)
+    monkeypatch.setattr(cli, "_client", lambda settings, log: ScriptedClient([]))
+    code = cli.main(["grow", "--env", "archive", "--run", str(tmp_path / "run")])
+    assert code == 130
+    out = capsys.readouterr().out
+    assert "Stopped with Ctrl+C" in out and "--resume" in out

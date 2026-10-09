@@ -154,6 +154,12 @@ def cmd_grow(args, settings) -> int:
                        train_limit=args.train_tasks, log=log)
     except StopRun as e:
         return _quota_exit(e, log, client, " with --resume")
+    except KeyboardInterrupt:
+        log(f"\nStopped with Ctrl+C. Finished generations and development notes are saved in "
+            f"{run_dir}. Run the same command with --resume to continue; the interrupted "
+            f"generation starts again, with the notes it already wrote.")
+        _usage(client, log)
+        return 130
     log("\n" + summary_table(records))
     log(f"genome: {run_dir / 'genome'}  (history: python -m stem show --run {run_dir})")
     _usage(client, log)
@@ -203,6 +209,11 @@ def cmd_show(args, settings) -> int:
         print(f"\n--- skills/{name}.md ---\n{text}")
     print("\nlineage (git log inside the genome):")
     print(g.log() or "(git not available)")
+    from .evolve import read_notebook
+    notes = read_notebook(Path(args.run), limit=1000)
+    if notes:
+        print("\ndevelopment notes (notebook.jsonl):")
+        print("\n".join(f"  {n}" for n in notes))
     gens = Path(args.run) / "generations.jsonl"
     if gens.exists():
         from .evolve import Generation, summary_table
@@ -251,6 +262,9 @@ def main(argv: list[str] | None = None) -> int:
     except LLMError as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
+    except KeyboardInterrupt:
+        print("\nStopped with Ctrl+C. Results finished so far are saved.", file=sys.stderr)
+        return 130
 
 
 if __name__ == "__main__":

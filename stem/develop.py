@@ -49,7 +49,7 @@ Held-out tasks of the same kind, which you will never see, decide whether this w
 {evidence}
 
 # How to work
-Decide first what this agent must become here, then make the changes that get it there. Look at the environment yourself (probe) before you assume how it behaves, and write what you learn down with note: older tool results are shortened to save space, notes are not. Prefer a few changes you have tested over many you have not; anything a tool prints shows up in test_tool's output, which helps when a tool returns the wrong thing. run_trial runs the agent on one training task with the genome as it is at that moment, and costs real budget; you have {trials} trial(s). When you are done, call finish with a short account of what you changed and why. The genome is then scored on all training tasks and kept only if it does better than the best genome so far."""
+Decide first what this agent must become here, then make the changes that get it there. Look at the environment yourself (probe) before you assume how it behaves, and write what you learn down with note: older tool results are shortened to save space, notes are not, and your notes are passed on to the next generation of development. Prefer a few changes you have tested over many you have not; anything a tool prints shows up in test_tool's output, which helps when a tool returns the wrong thing. run_trial runs the agent on one training task with the genome as it is at that moment, and costs real budget; you have {trials} trial(s). When you are done, call finish with a short account of what you changed and why. The genome is then scored on all training tasks and kept only if it does better than the best genome so far."""
 
 
 @dataclass
@@ -58,6 +58,7 @@ class Evidence:
     best_score: float
     latest: list[str] = field(default_factory=list)   # per-task lines with digests
     history: list[str] = field(default_factory=list)  # one line per earlier generation
+    notebook: list[str] = field(default_factory=list)  # notes written in earlier generations
 
     def render(self) -> str:
         lines = [f"Generation {self.generation}. Best mean training score so far: {self.best_score:.2f}."]
@@ -67,6 +68,9 @@ class Evidence:
         if self.history:
             lines.append("Earlier generations:")
             lines += [h[:220] for h in self.history[-4:]]
+        if self.notebook:
+            lines.append("Notes from earlier development (yours, oldest first):")
+            lines += [f"- {n}" for n in self.notebook]
         return "\n".join(lines)
 
 
@@ -92,7 +96,10 @@ class DevResult:
 
 def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence: Evidence,
             max_steps: int = 16, max_trials: int = 1, train_limit: int | None = None,
-            log: Callable[[str], None] | None = None) -> DevResult:
+            log: Callable[[str], None] | None = None,
+            on_note: Callable[[str], None] | None = None) -> DevResult:
+    """`on_note` is called with every note as it is written, so notes survive
+    an interruption and reach later generations."""
     log = log or (lambda _m: None)
     env = env_cls()
     train = env.tasks("train")[:train_limit] if train_limit else env.tasks("train")
@@ -174,10 +181,12 @@ def develop(genome: Genome, env_cls: type, client: Any, settings: Any, evidence:
     notes: list[str] = []
 
     def note(a: dict) -> str:
-        text = str(a.get("text", "")).strip()
+        text = str(a.get("text", "")).strip()[:600]
         if text:
-            notes.append(text[:600])
+            notes.append(text)
             del notes[:-12]
+            if on_note:
+                on_note(text)
         return f"noted ({len(notes)} notes kept)"
 
     s = lambda props, req=(): schema(props, list(req))
