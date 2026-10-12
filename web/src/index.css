@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+/* Stem Studio. Colours borrowed from histology stains: hematoxylin (the
+   purple-blue that marks what a cell has become) and eosin (the pink of
+   everything else), on the cool grey of a glass slide. */
+:root {
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --sunken: #e9ecf1;
+  --ink: #1d1a2e;
+  --muted: #625d78;
+  --line: #d9d8e4;
+  --hema: #4b3b8f;
+  --hema-soft: #e6e2f6;
+  --eosin: #c43a66;
+  --eosin-soft: #f9e3ea;
+  --ok: #1f7a55;
+  --code-bg: #f6f6fa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12101a;
+    --surface: #1a1725;
+    --sunken: #0e0c15;
+    --ink: #ebe8f5;
+    --muted: #a19bb8;
+    --line: #2e2a42;
+    --hema: #a99cf2;
+    --hema-soft: #2a2450;
+    --eosin: #f07ba1;
+    --eosin-soft: #3d1a29;
+    --ok: #5fd0a0;
+    --code-bg: #15121f;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-sunken: var(--sunken);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-hema: var(--hema);
+  --color-hema-soft: var(--hema-soft);
+  --color-eosin: var(--eosin);
+  --color-eosin-soft: var(--eosin-soft);
+  --color-ok: var(--ok);
+  --color-code: var(--code-bg);
+  --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+:focus-visible {
+  outline: 2px solid var(--hema);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+::selection {
+  background: var(--hema-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Output and code are shown as written: no "->" turned into an arrow. */
+code, pre, .font-mono {
+  font-variant-ligatures: none;
+}

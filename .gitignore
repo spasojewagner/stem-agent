@@ -165,3 +165,10 @@ temp/
 # Stem agent v2
 # ===========================
 runs/
+
+# ===========================
+# Stem Studio (web/)
+# ===========================
+node_modules/
+web/dist/
+*.tsbuildinfo

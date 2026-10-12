@@ -4,6 +4,8 @@ An agent that starts with no purpose and grows into whatever the environment it 
 
 Its only built-in capability is development: looking at its situation and rewriting its own genome. The genome holds its identity, working instructions, behaviour settings, and the tools, procedures, specialists and hooks it writes for itself. Each accepted change is a git commit, so you can read how it differentiated.
 
+**Stem Studio**, a FastAPI + React web app, starts runs, streams them live and shows how each genome differentiated ([below](#stem-studio-web-ui-and-api)).
+
 > v1 (the JetBrains internship submission) is kept in [`v1/`](v1) and tagged `v1-jetbrains-submission`. It started as a JavaScript engineer and only tuned its prompt. [DESIGN.md](DESIGN.md) explains what changed and why.
 
 ## How it works
@@ -29,7 +31,6 @@ development ──► rewrites a copy of the genome: identity, prompt, mode,
 ## Quick start (Windows, CMD, Python 3.10+)
 
 ```
-git checkout v2
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
@@ -52,6 +53,46 @@ docker compose build
 docker compose run --rm stem selftest
 docker compose run --rm stem grow --env archive
 ```
+
+## Stem Studio: web UI and API
+
+A FastAPI backend and a React frontend for the same command line. Start a run, watch it live, stop it safely, and read how a genome differentiated, generation by generation.
+
+![A run in Stem Studio: the lineage of kept and discarded generations, and what development did in each](docs/screenshots/studio-run.png)
+
+- **Runs:** every run with its lineage. Kept generations sit on the main line, sized and coloured by training score. A discarded candidate branches off the genome it was developed from.
+- **A run:** pick a generation to see its development summary, tokens, time, and each training task with a digest of what the agent did.
+  - **Genome:** identity, instructions, behaviour settings, tools with their code, procedures, specialists and hooks. This works for the best genome and for any generation's candidate, including discarded ones.
+  - **Changes:** every accepted change as a git diff of the genome.
+  - **Notes:** the notes development wrote for itself.
+- **Grow a genome:** start or continue a run. Its output streams live (server-sent events) with the current generation, phase and task. Stop works like Ctrl+C: progress is saved and the run can be continued.
+- **Evaluation:** the genome × environment matrix on held-out tasks as a heatmap, with each genome's own environment outlined. You can also start a matrix or a stem-only baseline from here.
+- **Environments:** what each environment offers, and its training and held-out tasks.
+
+| Changes: the genome's git history as diffs | Evaluation: the same code became different agents |
+|---|---|
+| ![Changes tab](docs/screenshots/studio-changes.png) | ![Evaluation matrix, dark theme](docs/screenshots/studio-evaluation.png) |
+
+```
+pip install -r requirements.txt
+cd web && npm install && npm run build && cd ..
+python -m studio                  http://127.0.0.1:8000  (API docs at /api/docs)
+
+python -m studio.demo             optional: example runs without an API key
+```
+
+For frontend work, run `python -m studio` and `npm run dev` in `web/` (http://localhost:5173, with `/api` proxied). With Docker: `docker compose up studio`.
+
+`python -m studio.demo` drives the real pipeline (development, sandboxed tools, environments, grading, selection, held-out matrix) with a scripted model in place of an LLM. Its runs are named `demo-*` and list the model as "scripted demo". The screenshots above come from them.
+
+How it is built:
+
+- **No second agent.** The API never runs the agent in its own process. Each job is the ordinary command line (`python -m stem grow ...`) in a child process. The API reads its output and the files it writes under `runs/`.
+- **One job at a time.** Runs share the provider's rate limits and the `runs/` folder, so a second start gets HTTP 409.
+- **Stopping saves progress.** Stop sends SIGINT, or Ctrl+Break on Windows, which the child turns into a KeyboardInterrupt. The command then saves its progress exactly as on Ctrl+C.
+- **Requests stay inside `runs/`.** Run names and commit ids are validated, and every path is checked to stay inside `runs/`.
+- **The API key is never sent to the browser.** The UI only learns whether one is set.
+- **Local by default.** The server listens on 127.0.0.1 unless told otherwise, because it can start runs that spend your quota.
 
 ## Commands
 
@@ -83,11 +124,16 @@ stem/
   evaluate.py    genome x environment matrix on held-out tasks
   envs/          exchange, codeaudit, archive (the only domain-aware code)
 tests/           pytest suite with a scripted model, and reference tools for selftest
+studio/          FastAPI backend: runs, genomes, lineage, jobs with live output; demo runs
+web/             React + TypeScript frontend (Vite, Tailwind, TanStack Query), Vitest tests
 v1/              the original submission
 ```
 
 ## Tests
 
 ```
-python -m pytest
+python -m pytest                  agent, environments, sandbox, and the studio API
+cd web && npm test                the UI (Vitest + Testing Library)
 ```
+
+GitHub Actions runs the selftest, both suites and the UI build on every push.

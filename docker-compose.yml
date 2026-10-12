@@ -1,16 +1,26 @@
 # docker compose run --rm stem selftest
 # docker compose run --rm stem grow --env archive
+# docker compose up studio            -> http://localhost:8000
+x-hardening: &hardening
+  build: .
+  env_file: .env              # the key reaches the container as an env var, not a file
+  volumes:
+    - ./runs:/app/runs        # genomes, logs and results stay on your disk
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  mem_limit: 2g
+  pids_limit: 256
+
 services:
   stem:
-    build: .
-    env_file: .env              # the key reaches the container as an env var, not a file
-    volumes:
-      - ./runs:/app/runs        # genomes, logs and results stay on your disk
-    read_only: true
-    tmpfs:
-      - /tmp
-    cap_drop: [ALL]
-    security_opt:
-      - no-new-privileges:true
-    mem_limit: 2g
-    pids_limit: 256
+    <<: *hardening
+
+  studio:
+    <<: *hardening
+    entrypoint: ["python", "-m", "studio", "--host", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:8000:8000"   # reachable only from this computer
